@@ -1,6 +1,6 @@
 import { getGoogleServices } from "./google";
 
-const SPREADSHEET_ID = "167bntn6z1inG3MmSoq0VFZHFZ0htTCY7T_yTtkjA7jE";
+const SPREADSHEET_ID = "1aiOxX9CnaFf75TssMbj3d9fqa3K3pJiRMIPP31BiZX4";
 
 interface DefaultValue {
   // Section defaults
@@ -51,8 +51,8 @@ export async function getDefaultValues(): Promise<DefaultValues> {
 
       const itemMaterialProduct = row[0]?.toString().trim();
       const location = row[1]?.toString().trim();
-      
-      if (!defaults[itemMaterialProduct]){
+
+      if (!defaults[itemMaterialProduct]) {
         defaults[itemMaterialProduct] = {};
       }
 
