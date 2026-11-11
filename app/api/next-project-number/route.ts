@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getNextProjectNumber } from "../../utils/sheetsWriter";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const nextProjectNo = await getNextProjectNumber();

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDefaultValues } from "../../utils/defaults";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   try {
     const defaults = await getDefaultValues();

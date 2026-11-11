@@ -2,6 +2,8 @@ import AsbestosReportForm from "../components/AsbestosReportForm";
 import { getReportFromSheets } from "../utils/sheetsWriter";
 import { notFound } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: Promise<{ reportId: string }>;
 }
