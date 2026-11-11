@@ -1,6 +1,6 @@
 import { getGoogleServices } from "./google";
 
-const SPREADSHEET_ID = "1aiOxX9CnaFf75TssMbj3d9fqa3K3pJiRMIPP31BiZX4";
+const SPREADSHEET_ID = process.env.DEFAULTS_SPREADSHEET_ID || "1aiOxX9CnaFf75TssMbj3d9fqa3K3pJiRMIPP31BiZX4";
 
 interface DefaultValue {
   // Section defaults
