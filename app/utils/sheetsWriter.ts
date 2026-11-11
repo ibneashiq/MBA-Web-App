@@ -2,7 +2,15 @@ import { getGoogleServices } from "./google";
 import { FormData, SectionData, ImageWithCaption } from "../types/section";
 
 // The spreadsheet ID for storing report data
-const REPORTS_SPREADSHEET_ID = process.env.REPORTS_SPREADSHEET_ID!;
+function getReportsSpreadsheetId(): string {
+  const id = process.env.REPORTS_SPREADSHEET_ID;
+  if (!id || !id.trim()) {
+    throw new Error(
+      "REPORTS_SPREADSHEET_ID environment variable is not configured. Please add it to your environment variables."
+    );
+  }
+  return id.trim();
+}
 
 // Sheet names within the spreadsheet
 const SHEETS = {
@@ -10,6 +18,112 @@ const SHEETS = {
   SECTIONS: "sections",
   IMAGES: "images",
 } as const;
+
+const HEADERS: Record<string, string[]> = {
+  main: [
+    "Report ID",
+    "Client",
+    "Project No",
+    "Address",
+    "Date of Survey",
+    "Reinspection Date",
+    "Number of Storeys",
+    "Outbuildings",
+    "Sections Count",
+    "Building Images Count",
+    "Submitted At",
+  ],
+  sections: [
+    "Section ID",
+    "Report ID",
+    "Order",
+    "Sample No",
+    "ID Symbol",
+    "Location",
+    "Item / Material / Product",
+    "Quantity / Extent",
+    "Asbestos Type",
+    "Not Accessed",
+    "Not Accessed Reason",
+    "Is External",
+    "Accessibility",
+    "Condition",
+    "Product Type Score",
+    "Damage Deterioration Score",
+    "Surface Treatment Score",
+    "Asbestos Type Score",
+    "Action Label",
+    "Action Monitor Reinspect",
+    "Action Encapsulate Enclose",
+    "Action Safe System Of Work",
+    "Action Remove Competent Contractor",
+    "Action Remove Licensed Contractor",
+    "Action Manage Access",
+    "Specific Recommendations",
+    "Is Licensed",
+    "Has Image",
+  ],
+  images: [
+    "Image ID",
+    "Report ID",
+    "Section ID",
+    "Type",
+    "Order",
+    "Caption",
+    "Uploaded Image ID",
+  ],
+};
+
+let sheetsInitialized = false;
+
+async function ensureSheetsExist(
+  sheets: Awaited<ReturnType<typeof getGoogleServices>>["sheets"],
+  spreadsheetId: string
+): Promise<void> {
+  if (sheetsInitialized) return;
+
+  try {
+    const meta = await sheets.spreadsheets.get({ spreadsheetId });
+    const existingTitles = new Set(
+      meta.data.sheets?.map((s) => s.properties?.title).filter(Boolean) as string[]
+    );
+
+    const sheetsToCreate = Object.keys(HEADERS).filter(
+      (name) => !existingTitles.has(name)
+    );
+
+    if (sheetsToCreate.length > 0) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: sheetsToCreate.map((title) => ({
+            addSheet: {
+              properties: { title },
+            },
+          })),
+        },
+      });
+
+      // Populate headers for newly created sheets
+      await Promise.all(
+        sheetsToCreate.map((name) =>
+          sheets.spreadsheets.values.update({
+            spreadsheetId,
+            range: `${name}!A1`,
+            valueInputOption: "USER_ENTERED",
+            requestBody: {
+              values: [HEADERS[name]],
+            },
+          })
+        )
+      );
+    }
+
+    sheetsInitialized = true;
+  } catch (error) {
+    console.warn("Could not auto-initialize spreadsheet tabs:", error);
+  }
+}
 
 // Default starting project number
 const DEFAULT_PROJECT_PREFIX = "GHM";
@@ -22,11 +136,13 @@ const DEFAULT_STARTING_NUMBER = 1000;
  */
 export async function getNextProjectNumber(): Promise<string> {
   const { sheets } = await getGoogleServices();
+  const spreadsheetId = getReportsSpreadsheetId();
+  await ensureSheetsExist(sheets, spreadsheetId);
 
   try {
     // Get all values from column C (projectNo column)
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: REPORTS_SPREADSHEET_ID,
+      spreadsheetId,
       range: `${SHEETS.MAIN}!C:C`,
     });
 
@@ -91,6 +207,8 @@ export async function writeReportToSheets(formData: FormData): Promise<{
   success: boolean;
 }> {
   const { sheets } = await getGoogleServices();
+  const spreadsheetId = getReportsSpreadsheetId();
+  await ensureSheetsExist(sheets, spreadsheetId);
   const reportId = generateReportId(formData.projectNo);
   const submittedAt = new Date().toISOString();
 
@@ -130,8 +248,9 @@ async function appendToSheet(
   sheetName: string,
   rows: (string | number | boolean)[][]
 ): Promise<void> {
+  const spreadsheetId = getReportsSpreadsheetId();
   await sheets.spreadsheets.values.append({
-    spreadsheetId: REPORTS_SPREADSHEET_ID,
+    spreadsheetId,
     range: `${sheetName}!A:Z`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
@@ -321,22 +440,23 @@ function formatDateForInput(dateStr: string): string {
  */
 export async function getReportFromSheets(reportId: string): Promise<FormData | null> {
   const { sheets } = await getGoogleServices();
+  const spreadsheetId = getReportsSpreadsheetId();
 
   try {
     // Fetch data from all three sheets in parallel
     const [mainResponse, sectionsResponse, imagesResponse] = await Promise.all([
       sheets.spreadsheets.values.get({
-        spreadsheetId: REPORTS_SPREADSHEET_ID,
+        spreadsheetId,
         range: `${SHEETS.MAIN}!A:K`,
         valueRenderOption: "FORMATTED_VALUE",
       }),
       sheets.spreadsheets.values.get({
-        spreadsheetId: REPORTS_SPREADSHEET_ID,
+        spreadsheetId,
         range: `${SHEETS.SECTIONS}!A:AC`,
         valueRenderOption: "FORMATTED_VALUE",
       }),
       sheets.spreadsheets.values.get({
-        spreadsheetId: REPORTS_SPREADSHEET_ID,
+        spreadsheetId,
         range: `${SHEETS.IMAGES}!A:G`,
         valueRenderOption: "FORMATTED_VALUE",
       }),
