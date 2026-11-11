@@ -154,8 +154,8 @@ async function uploadImage(
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || "Failed to upload image");
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.details || error.error || "Failed to upload image");
   }
 
   const result = await response.json();

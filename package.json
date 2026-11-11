@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:google": "node scripts/test-google-connection.mjs"
   },
   "dependencies": {
     "googleapis": "^168.0.0",
