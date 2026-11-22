@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
 async function uploadToAppsScript(
   url: string,
   base64Image: string,
-  filename: string
+  filename: string,
+  folderId?: string
 ): Promise<{ id: string; url?: string }> {
   let trimmedUrl = url.trim();
 
@@ -50,6 +51,7 @@ async function uploadToAppsScript(
     body: JSON.stringify({
       base64: cleanBase64,
       fileName: filename || "image.jpg",
+      folderId: folderId && folderId.trim() ? folderId.trim() : undefined,
     }),
     redirect: "manual",
   });
@@ -132,7 +134,8 @@ export async function POST(request: NextRequest) {
         const result = await uploadToAppsScript(
           uploadEndpoint.trim(),
           base64Image,
-          filename
+          filename,
+          process.env.GOOGLE_DRIVE_FOLDER_ID
         );
         return NextResponse.json({
           success: true,
