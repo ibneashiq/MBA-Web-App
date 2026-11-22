@@ -7,17 +7,31 @@ export const dynamic = "force-dynamic";
 /**
  * Handles uploading via Google Apps Script Web App.
  * Google Apps Script returns a 302 redirect with a Location header.
- * We manually follow the redirect to retrieve the resulting JSON.
+ * We manually follow the redirect to retrieve the resulting JSON safely.
  */
 async function uploadToAppsScript(
   url: string,
   base64Image: string,
   filename: string
 ): Promise<{ id: string; url?: string }> {
+  const trimmedUrl = url.trim();
+
+  // Validate that the URL is a Web App /exec URL
+  if (trimmedUrl.includes("/dev")) {
+    throw new Error(
+      "Your IMAGE_UPLOAD_ENDPOINT ends with /dev. You must use the production Web App URL ending with /exec."
+    );
+  }
+  if (trimmedUrl.includes("/edit")) {
+    throw new Error(
+      "Your IMAGE_UPLOAD_ENDPOINT is the Apps Script editor URL. You must deploy it as a Web App (Deploy > Manage Deployments) and use the /exec URL."
+    );
+  }
+
   // Strip data URI prefix if present
   const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, "");
 
-  const response = await fetch(url, {
+  const response = await fetch(trimmedUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -28,6 +42,8 @@ async function uploadToAppsScript(
     }),
     redirect: "manual",
   });
+
+  let rawText = "";
 
   // Handle Google Apps Script 302 / 301 redirect
   if (response.status === 302 || response.status === 301) {
@@ -40,28 +56,42 @@ async function uploadToAppsScript(
       method: "GET",
     });
 
-    if (!redirectResponse.ok) {
-      const errText = await redirectResponse.text();
-      throw new Error(`Google Apps Script redirect returned error: ${errText}`);
-    }
-
-    const data = await redirectResponse.json();
-    if (data.error) {
-      throw new Error(`Google Apps Script error: ${data.error}`);
-    }
-
-    const id = data.id || data.imageId || data.fileId;
-    if (!id) {
-      throw new Error("Google Apps Script did not return a valid file ID.");
-    }
-
-    return { id, url: data.url };
+    rawText = await redirectResponse.text();
+  } else {
+    rawText = await response.text();
   }
 
-  // If response is not redirected
-  const data = await response.json();
-  if (!response.ok || data.error) {
-    throw new Error(data.error || `Upload endpoint returned status ${response.status}`);
+  // Parse response safely
+  let data: any;
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    // If the response is HTML, analyze what Google returned
+    if (
+      rawText.includes("accounts.google.com") ||
+      rawText.includes("Sign in") ||
+      rawText.includes("ServiceLogin")
+    ) {
+      throw new Error(
+        "Google Apps Script requires sign-in. In Google Apps Script, click Deploy > Manage deployments > Edit (pencil icon), and set 'Who has access' to 'Anyone', then click Deploy."
+      );
+    }
+
+    if (rawText.includes("Script function not found")) {
+      throw new Error(
+        "Google Apps Script could not find the 'doPost' function. Ensure your script code has 'function doPost(e)' and deploy a New Version."
+      );
+    }
+
+    const titleMatch = rawText.match(/<title>([^<]+)<\/title>/i);
+    const pageTitle = titleMatch ? ` (${titleMatch[1].trim()})` : "";
+    throw new Error(
+      `Google Apps Script returned an HTML page${pageTitle} instead of JSON. Ensure 'Who has access' is set to 'Anyone', and check the 'Executions' tab in script.google.com to see the error details.`
+    );
+  }
+
+  if (data.error) {
+    throw new Error(`Google Apps Script error: ${data.error}`);
   }
 
   const id = data.id || data.imageId || data.fileId;
