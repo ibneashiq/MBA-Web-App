@@ -14,7 +14,18 @@ async function uploadToAppsScript(
   base64Image: string,
   filename: string
 ): Promise<{ id: string; url?: string }> {
-  const trimmedUrl = url.trim();
+  let trimmedUrl = url.trim();
+
+  // If the user pasted only an ID instead of a full URL
+  if (!trimmedUrl.startsWith("http://") && !trimmedUrl.startsWith("https://")) {
+    if (trimmedUrl.startsWith("AKfy")) {
+      trimmedUrl = `https://script.google.com/macros/s/${trimmedUrl}/exec`;
+    } else {
+      throw new Error(
+        `IMAGE_UPLOAD_ENDPOINT must be a full URL (starting with "https://script.google.com/macros/s/.../exec"). You entered an ID ("${trimmedUrl}") instead of the Web App URL.`
+      );
+    }
+  }
 
   // Validate that the URL is a Web App /exec URL
   if (trimmedUrl.includes("/dev")) {
